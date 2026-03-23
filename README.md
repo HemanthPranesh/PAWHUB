@@ -1,3 +1,1 @@
-# Welcome to your Lovable project
-
-TODO: Document your project here
+SIMPLE PET CARE AND MANAGEMENT WEBAPP
