@@ -1,10 +1,6 @@
 // ============================================
 // PawHub Backend — In-Memory REST-like API
 // ============================================
-// This module simulates a backend server with
-// modular functions, in-memory storage, and
-// proper validation. No database required.
-// ============================================
 
 export type PetType = "Dog" | "Cat" | "Bird" | "Rabbit" | "Other";
 export type ServiceType = "Vet" | "Grooming" | "Boarding";
@@ -13,6 +9,8 @@ export type BookingStatus = "Pending" | "Confirmed" | "Completed";
 export interface Service {
   name: ServiceType;
   basePrice: number;
+  description: string;
+  duration: string;
 }
 
 export interface Booking {
@@ -32,11 +30,19 @@ export interface ApiResponse<T = unknown> {
   error?: string;
 }
 
-// ── Service Catalog (GET /services) ──────────────
+export interface BookingStats {
+  total: number;
+  pending: number;
+  confirmed: number;
+  completed: number;
+  totalRevenue: number;
+}
+
+// ── Service Catalog ──────────────────────────────
 const SERVICE_CATALOG: Service[] = [
-  { name: "Vet", basePrice: 500 },
-  { name: "Grooming", basePrice: 300 },
-  { name: "Boarding", basePrice: 700 },
+  { name: "Vet", basePrice: 500, description: "Health checkup, vaccinations & treatments", duration: "30-60 min" },
+  { name: "Grooming", basePrice: 300, description: "Bath, haircut, nail trimming & styling", duration: "45-90 min" },
+  { name: "Boarding", basePrice: 700, description: "Comfortable overnight stay with meals", duration: "24 hrs" },
 ];
 
 const PET_SURCHARGES: Record<PetType, number> = {
@@ -47,7 +53,6 @@ const PET_SURCHARGES: Record<PetType, number> = {
   Other: 0,
 };
 
-// Valid status transitions: Pending → Confirmed → Completed
 const VALID_TRANSITIONS: Record<BookingStatus, BookingStatus | null> = {
   Pending: "Confirmed",
   Confirmed: "Completed",
@@ -60,26 +65,26 @@ let nextId = 1;
 
 // ── Core Functions ───────────────────────────────
 
-/** GET /services — returns predefined service catalog */
 export function getServices(): ApiResponse<Service[]> {
   return { success: true, data: [...SERVICE_CATALOG] };
 }
 
-/** Calculates price = base price of service + pet type surcharge */
 export function calculatePrice(service: ServiceType, petType: PetType): number {
   const svc = SERVICE_CATALOG.find((s) => s.name === service);
   if (!svc) return 0;
   return svc.basePrice + (PET_SURCHARGES[petType] ?? 0);
 }
 
-/** POST /booking — creates a new booking with auto-calculated price */
+export function getPetSurcharge(petType: PetType): number {
+  return PET_SURCHARGES[petType] ?? 0;
+}
+
 export function createBooking(input: {
   ownerName: string;
   petName: string;
   petType: PetType;
   service: ServiceType;
 }): ApiResponse<Booking> {
-  // Input validation
   if (!input.ownerName?.trim()) return { success: false, error: "Owner name is required" };
   if (!input.petName?.trim()) return { success: false, error: "Pet name is required" };
   if (!input.petType) return { success: false, error: "Pet type is required" };
@@ -112,12 +117,21 @@ export function createBooking(input: {
   return { success: true, data: booking };
 }
 
-/** GET /bookings — returns all bookings */
 export function getBookings(): ApiResponse<Booking[]> {
   return { success: true, data: [...bookings] };
 }
 
-/** PUT /booking/:id — updates booking status with lifecycle validation */
+export function getBookingStats(): ApiResponse<BookingStats> {
+  const stats: BookingStats = {
+    total: bookings.length,
+    pending: bookings.filter((b) => b.status === "Pending").length,
+    confirmed: bookings.filter((b) => b.status === "Confirmed").length,
+    completed: bookings.filter((b) => b.status === "Completed").length,
+    totalRevenue: bookings.reduce((sum, b) => sum + b.price, 0),
+  };
+  return { success: true, data: stats };
+}
+
 export function updateStatus(id: string, newStatus: BookingStatus): ApiResponse<Booking> {
   const booking = bookings.find((b) => b.id === id);
   if (!booking) return { success: false, error: `Booking ${id} not found` };
@@ -134,7 +148,6 @@ export function updateStatus(id: string, newStatus: BookingStatus): ApiResponse<
   return { success: true, data: { ...booking } };
 }
 
-/** DELETE /booking/:id — removes a booking */
 export function deleteBooking(id: string): ApiResponse<{ id: string }> {
   const idx = bookings.findIndex((b) => b.id === id);
   if (idx === -1) return { success: false, error: `Booking ${id} not found` };
